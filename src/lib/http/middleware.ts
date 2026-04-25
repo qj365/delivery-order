@@ -1,4 +1,4 @@
-import { Prisma, type UserPermissionType } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import type { AuthRequest } from "@src/types/auth";
 import type { NextFunction, Request, Response } from "express";
 import { rateLimit } from "express-rate-limit";

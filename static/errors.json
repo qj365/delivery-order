@@ -58,5 +58,25 @@
     "code": 1001,
     "statusCode": 400,
     "message": "Validation error"
+  },
+  "OrderNotAssignable": {
+    "code": 2001,
+    "statusCode": 409,
+    "message": "Order is not assignable"
+  },
+  "RunClosed": {
+    "code": 2002,
+    "statusCode": 422,
+    "message": "Delivery run is closed"
+  },
+  "StopAlreadyResolved": {
+    "code": 2003,
+    "statusCode": 409,
+    "message": "Stop is already resolved"
+  },
+  "ProofMismatch": {
+    "code": 2004,
+    "statusCode": 409,
+    "message": "Stop already completed with different proof"
   }
 }

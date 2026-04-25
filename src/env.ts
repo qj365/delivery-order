@@ -17,11 +17,11 @@ const envVariables = z.object({
   DATABASE_URL: z
     .string()
     .url()
-    .default("mysql://root:root@localhost:3306/fulfillment"),
+    .default("postgresql://postgres:postgres@localhost:5432/delivery"),
   DATABASE_READ_URL: z
     .string()
     .url()
-    .default("mysql://root:root@localhost:3306/fulfillment"),
+    .default("postgresql://postgres:postgres@localhost:5432/delivery"),
   DATABASE_LOG_LEVEL: z.string().optional().default("error"),
 
   REDIS_URL: z.string().url().default("redis://localhost:6379"),
