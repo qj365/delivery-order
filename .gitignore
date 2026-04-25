@@ -1,0 +1,13 @@
+node_modules
+dist
+firebaseServiceAccount.json
+.env
+data
+logs
+./docs
+.vscode/launch.json
+/api
+/.cursorrules
+scripts/decrypt/index.ts
+/scripts/create-product-from-link/*.xlsx
+/http-res

@@ -1,0 +1,1124 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl", "linux-musl-openssl-3.0.x", "linux-musl-arm64-openssl-1.1.x"]
+}
+
+generator json {
+  provider = "prisma-json-types-generator"
+}
+
+datasource db {
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+enum PaymentGatewayType {
+  PAYPAL
+}
+
+model PaymentGateway {
+  id Int @id @default(autoincrement())
+
+  name      String
+  type      PaymentGatewayType
+  publicKey String
+  secretKey String
+
+  accessToken    String?
+  tokenExpiresAt DateTime?
+  isSandbox      Boolean   @default(true)
+  hookId         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum UserRole {
+  ADMIN
+  SELLER
+  SUPPLIER
+}
+
+model User {
+  id Int @id @default(autoincrement())
+
+  uid   String  @unique
+  email String  @unique
+  name  String?
+
+  timeZone String @default("America/Los_Angeles")
+
+  role UserRole
+
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  seller              Seller?
+  supplier            Supplier?
+  rfqs                Rfq[]
+  products            Product[]
+  supplierRfqViews    SupplierRfqView[]
+  stores              Store[]
+  sellerOrders        SellerOrder[]
+  supplierOrders      SupplierOrder[]
+  paymentMethods      PaymentMethod[]
+  balance             Balance?
+  balanceAlertSetting BalanceAlertSetting?
+
+  balanceTransactionsFrom      BalanceTransaction[]      @relation("fromUser")
+  balanceTransactionsTo        BalanceTransaction[]      @relation("toUser")
+  admin                        Admin?
+  userToSubRoles               UserToSubRole[]
+  notifications                Notification[]
+  notificationSetting          NotificationSetting?
+  fcmTokens                    FcmToken[]
+  balanceTransactionsConfirmBy BalanceTransaction[]      @relation("confirmByUser")
+  sellerPerformanceLog         SellerPerformanceLog?
+  supplierPerformanceLog       SupplierPerformanceLog?
+  sellerFinancialLogs          SellerFinancialLog[]
+  supplierFinancialLogs        SupplierFinancialLog[]
+  sellerOrderLogs              SellerOrderLog[]
+  supplierOrderLogs            SupplierOrderLog[]
+  autoFulfillSetting           AutoFulfillSetting?
+  kafkaFailAutoFulfillLogs     KafkaFailAutoFulfillLog[]
+
+  @@index([role])
+  @@index([timeZone])
+}
+
+model Admin {
+  id Int @id @default(autoincrement())
+
+  phoneNumber        String?
+  phoneCountryCode   String?
+  isActive           Boolean @default(true)
+  hasChangedPassword Boolean @default(false)
+
+  user   User @relation(fields: [userId], references: [id])
+  userId Int  @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model UserToSubRole {
+  user      User    @relation(fields: [userId], references: [id])
+  userId    Int
+  subRole   SubRole @relation(fields: [subRoleId], references: [id])
+  subRoleId Int
+
+  assignedAt DateTime @default(now())
+
+  @@id([userId, subRoleId])
+  @@index([userId])
+  @@index([subRoleId])
+}
+
+model SubRole {
+  id Int @id @default(autoincrement())
+
+  name String @unique @db.VarChar(255)
+
+  permissions    UserPermissionToSubRole[]
+  userToSubRoles UserToSubRole[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum UserPermissionType {
+  SELLER_MANAGEMENT_VIEW_SELLER
+  SELLER_MANAGEMENT_CREATE_SELLER
+  SELLER_MANAGEMENT_CHANGE_SELLER_STATUS
+  SELLER_MANAGEMENT_TOPUP
+  SUPPLIER_MANAGEMENT_VIEW_SUPPLIER
+  SUPPLIER_MANAGEMENT_CREATE_SUPPLIER
+  SUPPLIER_MANAGEMENT_CHANGE_SUPPLIER_STATUS
+  SUPPLIER_MANAGEMENT_PAYOUT
+  PLATFORM_SETTING_VIEW_SETTING
+  PLATFORM_SETTING_EDIT_SETTING
+  ACCOUNT_MANAGEMENT_VIEW_ACCOUNT
+  ACCOUNT_MANAGEMENT_ADD_NEW_ACCOUNT
+  ACCOUNT_MANAGEMENT_EDIT_ACCOUNT
+  ROLE_MANAGEMENT_VIEW_ROLE
+  ROLE_MANAGEMENT_ADD_NEW_ROLE
+  ROLE_MANAGEMENT_EDIT_ROLE
+  ROLE_MANAGEMENT_DELETE_ROLE
+  VIEW_ORDER
+  EXPORT_ORDER
+  VIEW_PRODUCT
+  VIEW_CHAT
+  RESPONSE_CHAT
+  VIEW_TICKET
+  REVIEW_TICKET
+  VIEW_REPORT
+  VIEW_BALANCE
+  VIEW_TRANSACTION
+}
+
+model UserPermission {
+  id Int @id @default(autoincrement())
+
+  type UserPermissionType @unique
+
+  createdAt DateTime @default(now())
+
+  subRoles UserPermissionToSubRole[]
+}
+
+model UserPermissionToSubRole {
+  subRole      SubRole        @relation(fields: [subRoleId], references: [id])
+  subRoleId    Int
+  permission   UserPermission @relation(fields: [permissionId], references: [id])
+  permissionId Int
+
+  @@id([subRoleId, permissionId])
+  @@index([subRoleId])
+  @@index([permissionId])
+}
+
+enum SellerType {
+  INHOUSE
+  OUTHOUSE
+}
+
+model Seller {
+  id Int @id @default(autoincrement())
+
+  sellerType SellerType @default(INHOUSE)
+  sellerCode String     @unique
+  rfqCode    String     @unique
+  apiKey     String     @unique
+
+  phoneNumber      String?
+  phoneCountryCode String?
+
+  hasChangedPassword Boolean @default(false)
+  usedToActivate     Boolean @default(false) // used to activate seller in the past
+
+  isActive Boolean @default(false)
+
+  user   User @relation(fields: [userId], references: [id])
+  userId Int  @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+model Supplier {
+  id Int @id @default(autoincrement())
+
+  supplierCode     String  @unique
+  phoneNumber      String?
+  phoneCountryCode String?
+
+  isActive Boolean @default(false)
+
+  hasChangedPassword Boolean @default(false)
+
+  user   User @relation(fields: [userId], references: [id])
+  userId Int  @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+enum RfqStatus {
+  WAITING
+  EXPIRED
+  ACCEPTED
+  CLOSED
+  UNLINKED
+}
+
+enum RfqCreatedFrom {
+  BETTAMAX
+  FULFILLMENT
+}
+
+model Rfq {
+  id Int @id @default(autoincrement())
+
+  productImage    String
+  productName     String  @db.VarChar(255)
+  productUrl      String  @db.VarChar(2048)
+  productUrlMd5   Bytes   @db.Binary(16)
+  shippingCountry String? @db.VarChar(255)
+  rfqCode         String  @unique
+  referId         String? @unique
+
+  status RfqStatus @default(WAITING)
+
+  createdFrom RfqCreatedFrom @default(FULFILLMENT)
+  acceptedAt  DateTime?
+
+  sellerUserId Int
+  sellerUser   User @relation(fields: [sellerUserId], references: [id])
+
+  storeId Int?
+  store   Store? @relation(fields: [storeId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  supplierRfqViews SupplierRfqView[]
+
+  @@index([sellerUserId, productUrlMd5])
+  @@index([status, createdAt])
+  @@index([storeId, sellerUserId, status])
+}
+
+model Product {
+  id Int @id @default(autoincrement())
+
+  name        String @db.VarChar(120)
+  sku         String @db.VarChar(10)
+  description String @db.MediumText
+  /// [ProductImages]
+  images      Json
+  // real images to verify product quality and support 'Item not as described' claims
+  /// [ProductImages]
+  realImages  Json?
+
+  /// [VariantOptions]
+  variantOptions Json
+
+  processingTime       Float
+  totalProductVariants Int
+
+  isActive Boolean @default(true)
+
+  totalSeller Int @default(0)
+  totalSold   Int @default(0)
+
+  supplierUserId Int
+  supplierUser   User @relation(fields: [supplierUserId], references: [id])
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  productVariants ProductVariant[]
+  orderItems      OrderItem[]
+
+  @@unique([supplierUserId, sku])
+}
+
+model ProductVariant {
+  id Int @id @default(autoincrement())
+
+  name  String @db.Text()
+  sku   String
+  image String
+
+  isActive Boolean @default(true)
+
+  /// [RegionPricing]
+  priceUS    Json?
+  /// [RegionPricing]  
+  priceUK    Json?
+  /// [RegionPricing]
+  priceEU    Json?
+  /// [RegionPricing]
+  priceCA    Json?
+  /// [RegionPricing]
+  priceAU    Json?
+  /// [RegionPricing]
+  priceOther Json?
+
+  length Float?
+  width  Float?
+  height Float?
+  weight Float?
+
+  /// [VariantOptionIds]
+  variantOptionIds Json
+
+  product   Product @relation(fields: [productId], references: [id])
+  productId Int
+
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  orderItems OrderItem[]
+
+  @@unique([productId, sku])
+}
+
+model SupplierRfqView {
+  id Int @id @default(autoincrement())
+
+  rfq   Rfq @relation(fields: [rfqId], references: [id])
+  rfqId Int
+
+  supplierUser   User @relation(fields: [supplierUserId], references: [id])
+  supplierUserId Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([rfqId, supplierUserId])
+  @@index([rfqId])
+  @@index([supplierUserId])
+}
+
+enum StoreType {
+  BETTAMAX_FA
+  BETTAMAX_SELF_FULFILLMENT
+}
+
+enum StoreStatus {
+  CONNECTED
+  DISCONNECTED
+  PENDING
+  REJECTED
+}
+
+model Store {
+  id Int @id @default(autoincrement())
+
+  name            String  @default("Fullfillment Agent")
+  email           String?
+  connectedApiKey String  @db.VarChar(400) // api key to connect to third party store
+  referId         String? // id of store in third party store
+
+  type         StoreType   @default(BETTAMAX_FA)
+  status       StoreStatus @default(PENDING)
+  sellerUserId Int
+  sellerUser   User        @relation(fields: [sellerUserId], references: [id])
+
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  rfqs                    Rfq[]
+  sellerOrders            SellerOrder[]
+  storeStatusSyncFailures StoreStatusSyncFailure[]
+
+  @@unique([sellerUserId, type, referId])
+  @@index([sellerUserId, status])
+}
+
+model OrderInfo {
+  id Int @id @default(autoincrement())
+
+  customerName     String
+  customerEmail    String
+  customerPhone    String?
+  // shipping info
+  shippingAddress1 String?
+  shippingAddress2 String?
+  shippingCity     String?
+  shippingProvince String?
+  shippingZipCode  String?
+  shippingCountry  String?
+  // billing info
+  billingAddress1  String?
+  billingAddress2  String?
+  billingCity      String?
+  billingProvince  String?
+  billingZipCode   String?
+  billingCountry   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  supplierOrder SupplierOrder[]
+  sellerOrder   SellerOrder?
+}
+
+enum OrderItemFulfillmentStatus {
+  UNFULFILL
+  FULFILLED
+}
+
+enum OrderFulfillmentStatus {
+  UNPAID
+  UNFULFILL
+  FULFILLED
+  DELIVERED
+  PARTIALLY_DELIVERED
+  PARTIALLY_FULFILLED
+}
+
+enum DisputeStatus {
+  WIN
+  LOSE
+  IN_PROGRESS
+}
+
+enum SellerOrderIssueType {
+  BALANCE_INSUFFICIENT
+}
+
+model SellerOrder {
+  id Int @id @default(autoincrement())
+
+  code         String @unique
+  sellerUserId Int
+  sellerUser   User   @relation(fields: [sellerUserId], references: [id])
+
+  fulfillmentStatus OrderFulfillmentStatus @default(UNPAID)
+  refunded          Boolean?
+  disputeStatus     DisputeStatus?
+  orderAt           DateTime
+  shippingFee       Float
+  total             Float
+  subTotal          Float
+  seqNum            Int
+  refId             String?
+  issueType         SellerOrderIssueType?
+
+  storeId Int
+  store   Store @relation(fields: [storeId], references: [id])
+
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  orderItems          OrderItem[]
+  orderInfoId         Int                  @unique
+  orderInfo           OrderInfo            @relation(fields: [orderInfoId], references: [id])
+  refundSellerOrders  RefundSellerOrder[]
+  supplierOrders      SupplierOrder[]
+  balanceTransactions BalanceTransaction[]
+
+  @@unique([sellerUserId, refId])
+  @@index([sellerUserId, orderAt, fulfillmentStatus])
+  @@index([sellerUserId, disputeStatus, orderAt])
+  @@index([sellerUserId, fulfillmentStatus, storeId])
+  @@index([orderInfoId])
+  @@index([seqNum])
+  @@index([storeId])
+}
+
+model OrderItem {
+  id Int @id @default(autoincrement())
+
+  productName       String?
+  quantity          Int
+  total             Float
+  fulfillmentStatus OrderItemFulfillmentStatus @default(UNFULFILL)
+  refId             String
+
+  deliveryStatus   DeliveryStatus? // keep this for faster query, only have value when order item is fulfilled
+  supplierOrderId  Int
+  supplierOrder    SupplierOrder   @relation(fields: [supplierOrderId], references: [id])
+  productVariantId Int
+  productVariant   ProductVariant  @relation(fields: [productVariantId], references: [id])
+  sellerOrderId    Int
+  sellerOrder      SellerOrder     @relation(fields: [sellerOrderId], references: [id])
+  productId        Int
+  product          Product         @relation(fields: [productId], references: [id])
+  shipmentId       Int?
+  shipment         Shipment?       @relation(fields: [shipmentId], references: [id])
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  refundOrderItems RefundOrderItem[]
+
+  @@unique([refId, sellerOrderId])
+  @@index([sellerOrderId])
+  @@index([productId])
+  @@index([supplierOrderId])
+  @@index([productVariantId])
+  @@index([shipmentId])
+}
+
+enum SupplierOrderFulfillmentStatus {
+  UNPAID
+  UNFULFILL
+  PARTIALLY_FULFILLED
+  FULFILLED
+}
+
+model SupplierOrder {
+  id Int @id @default(autoincrement())
+
+  code String @unique
+
+  fulfillmentStatus SupplierOrderFulfillmentStatus @default(UNPAID)
+  orderAt           DateTime
+  shippingFee       Float
+  platformFee       Float
+  subTotal          Float
+  total             Float
+  orderInfoId       Int
+  orderInfo         OrderInfo                      @relation(fields: [orderInfoId], references: [id])
+  supplierUserId    Int
+  supplierUser      User                           @relation(fields: [supplierUserId], references: [id])
+  sellerOrderId     Int
+  sellerOrder       SellerOrder                    @relation(fields: [sellerOrderId], references: [id])
+  seqNum            Int
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
+
+  orderItems           OrderItem[]
+  balanceTransactions  BalanceTransaction[]
+  unsyncOrderTrackings UnsyncOrderTracking[]
+
+  @@index([orderInfoId])
+  @@index([supplierUserId, fulfillmentStatus])
+  @@index([sellerOrderId])
+}
+
+enum PaymentMethodType {
+  CARD
+  PAYPAL
+}
+
+model PaymentMethod {
+  id Int @id @default(autoincrement())
+
+  type PaymentMethodType
+
+  paymentToken String  @unique
+  isDefault    Boolean @default(false)
+  isDeleted    Boolean @default(false)
+
+  /// [PaymentMethodInfo]
+  paymentInfo Json
+
+  /// [BillingAddress]
+  billingAddress Json?
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, isDeleted, isDefault])
+}
+
+model RefundSellerOrder {
+  id Int @id @default(autoincrement())
+
+  amount        Float
+  note          String
+  refundAt      DateTime
+  sellerOrderId Int
+  sellerOrder   SellerOrder @relation(fields: [sellerOrderId], references: [id])
+
+  refundOrderItems RefundOrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sellerOrderId])
+}
+
+model RefundOrderItem {
+  id Int @id @default(autoincrement())
+
+  orderItemId         Int
+  orderItem           OrderItem         @relation(fields: [orderItemId], references: [id])
+  refundSellerOrderId Int
+  refundSellerOrder   RefundSellerOrder @relation(fields: [refundSellerOrderId], references: [id])
+
+  quantity Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderItemId, refundSellerOrderId])
+  @@index([refundSellerOrderId])
+}
+
+enum ApiKeyPurpose {
+  BETTAMAX_INTERNAL
+}
+
+model PlatformApiKey {
+  id Int @id @default(autoincrement())
+
+  hashedKey String @unique
+
+  type ApiKeyPurpose
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum BalanceType {
+  SELLER
+  SUPPLIER
+}
+
+model Balance {
+  id Int @id @default(autoincrement())
+
+  total     Decimal? @db.Decimal(20, 2)
+  available Decimal? @db.Decimal(20, 2)
+  pending   Decimal? @db.Decimal(20, 2)
+
+  type BalanceType
+
+  userId Int  @unique
+  user   User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model BalanceAlertSetting {
+  id Int @id @default(autoincrement())
+
+  thresholdAmount Float @default(1000)
+
+  sellerUserId Int  @unique
+  sellerUser   User @relation(fields: [sellerUserId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum BalanceTransactionType {
+  TOPUP
+  PAYMENT
+  PAYOUT
+}
+
+enum BalanceTransactionEvent {
+  PLACE_ORDER
+  PAYOUT
+  ADMIN_PAYOUT
+  AUTO_TOPUP
+  ADMIN_TOPUP
+  TOPUP // normal topup through paypal
+  DELIVERED_RELEASE // after order is delivered, will be released after 48 hours
+}
+
+enum TransactionPaymentMethodType {
+  CARD
+  PAYPAL
+  INTERNAL
+}
+
+// only event PLACE_ORDER and PAYOUT will have transactionCode
+model BalanceTransaction {
+  id Int @id @default(autoincrement())
+
+  transactionCode String? @unique
+
+  type              BalanceTransactionType
+  event             BalanceTransactionEvent
+  paymentMethodType TransactionPaymentMethodType
+
+  total     Decimal? @db.Decimal(20, 2)
+  available Decimal? @db.Decimal(20, 2)
+  pending   Decimal? @db.Decimal(20, 2)
+
+  paymentTransactionId String? // is order id in paypal
+
+  scheduledAt DateTime  @default(now())
+  executedAt  DateTime?
+
+  sellerOrderId Int?
+  sellerOrder   SellerOrder? @relation(fields: [sellerOrderId], references: [id])
+
+  supplierOrderId Int?
+  supplierOrder   SupplierOrder? @relation(fields: [supplierOrderId], references: [id])
+
+  fromUserId Int?
+  fromUser   User? @relation("fromUser", fields: [fromUserId], references: [id])
+
+  toUserId Int?
+  toUser   User? @relation("toUser", fields: [toUserId], references: [id])
+
+  confirmByUserId Int?
+  confirmByUser   User? @relation("confirmByUser", fields: [confirmByUserId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type, event, scheduledAt, executedAt])
+  @@index([fromUserId, type, transactionCode, executedAt])
+  @@index([toUserId, type, transactionCode, executedAt])
+  @@index([sellerOrderId, transactionCode])
+  @@index([supplierOrderId])
+  @@index([confirmByUserId])
+}
+
+enum DeliveryStatus {
+  PENDING
+  INFORECEIVED
+  TRANSIT
+  PICKUP
+  DELIVERED
+  UNDELIVERED
+  EXCEPTION
+  EXPIRED
+  NOTFOUND
+}
+
+model OrderTracking {
+  id Int @id @default(autoincrement())
+
+  trackingDetail           String         @db.Text
+  location                 String?        @db.VarChar(255)
+  checkpointDeliveryStatus DeliveryStatus
+  checkpointDate           DateTime?
+  subStatus                String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shipmentId Int
+  shipment   Shipment @relation(fields: [shipmentId], references: [id])
+
+  @@index([shipmentId])
+}
+
+enum TaskQueueType {
+  IMPORT_ORDER
+  EXPORT_ORDER
+  EXPORT_RFQ
+}
+
+enum TaskQueueStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+enum OwnerType {
+  SUPPLIER
+  SELLER
+}
+
+model TaskQueue {
+  id Int @id @default(autoincrement())
+
+  type      TaskQueueType
+  params    Json
+  response  Json?
+  status    TaskQueueStatus @default(PENDING)
+  owner     Int?
+  ownerType OwnerType?
+
+  createdAt DateTime @default(now())
+
+  @@index([type, status])
+}
+
+enum HookType {
+  TRACKING_MORE
+}
+
+model HookHistory {
+  id Int @id @default(autoincrement())
+
+  type           HookType @default(TRACKING_MORE)
+  hookName       String
+  data           Json
+  idempotencyKey String
+
+  createdAt DateTime @default(now())
+
+  @@index([idempotencyKey])
+}
+
+enum SettingKey {
+  SUPPLIER_TRANSACTION_FEE
+  PAYOUT_DAYS
+}
+
+model PlatformSetting {
+  id Int @id @default(autoincrement())
+
+  key   SettingKey @unique
+  value String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
+}
+
+enum NotificationEvent {
+  SELLER_GOT_NEW_ORDER
+  SELLER_ORDER_PAYMENT_FAILED
+  SELLER_ORDER_FULFILLED
+
+  SELLER_RFQ_NEW_QUOTE
+
+  SELLER_MY_BALANCE_TOP_UP_SUCCESS
+  SELLER_MY_BALANCE_PAYMENT_SUCCESS
+  SELLER_MY_BALANCE_LOW_CREDIT
+
+  SELLER_MY_PRODUCT_SUSPENDED_SOURCING
+  SELLER_MY_PRODUCT_SHIPPING_CHANGED
+  // --------------------------------
+  SUPPLIER_GOT_NEW_ORDER
+  SUPPLIER_REMIND_FULFILL
+  SUPPLIER_RFQ_NEW_QUOTE
+}
+
+model Notification {
+  id BigInt @id @default(autoincrement())
+
+  title       String
+  description String?           @db.VarChar(500)
+  /// [NotificationData]
+  data        Json?
+  event       NotificationEvent
+  isRead      Boolean           @default(false)
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, isRead])
+}
+
+model NotificationSetting {
+  id Int @id @default(autoincrement())
+
+  isOrderGotNew              Boolean @default(true)
+  isOrderAutoPaymentFailed   Boolean @default(true)
+  isOrderFulfilled           Boolean @default(true)
+  isBalanceTopupSuccess      Boolean @default(true)
+  isBalancePaymentSuccess    Boolean @default(true)
+  isBalanceLowCredit         Boolean @default(true)
+  isProductSourcingSuspended Boolean @default(true)
+  isProductShippingChanged   Boolean @default(true)
+
+  isRfqNewQuote   Boolean @default(true)
+  isOtherNewQuote Boolean @default(true)
+  userId          Int
+  user            User    @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId])
+}
+
+model FcmToken {
+  id Int @id @default(autoincrement())
+
+  token String
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, token])
+}
+
+model SellerPerformanceLog {
+  id Int @id @default(autoincrement())
+
+  totalUnpaidOrder Int @default(0)
+  totalNewQuote    Int @default(0)
+  totalNewTicket   Int @default(0)
+  totalRfqCreated  Int @default(0)
+  totalOrder       Int @default(0)
+
+  sellerUserId Int
+  sellerUser   User @relation(fields: [sellerUserId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sellerUserId])
+}
+
+model SupplierPerformanceLog {
+  id Int @id @default(autoincrement())
+
+  totalUnfulfillOrder Int   @default(0)
+  totalNewRequest     Int   @default(0)
+  totalNewTicket      Int   @default(0)
+  totalQuoteSent      Int   @default(0)
+  totalOrder          Int   @default(0)
+  totalRevenue        Float @default(0)
+
+  supplierUserId Int
+  supplierUser   User @relation(fields: [supplierUserId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([supplierUserId])
+}
+
+model SellerFinancialLog {
+  id Int @id @default(autoincrement())
+
+  totalRevenue Float @default(0)
+  totalPayment Float @default(0)
+  totalRefund  Float @default(0)
+
+  sellerUserId Int
+  sellerUser   User @relation(fields: [sellerUserId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sellerUserId, createdAt])
+}
+
+model SupplierFinancialLog {
+  id Int @id @default(autoincrement())
+
+  totalRevenue Float @default(0)
+  totalPayout  Float @default(0)
+  totalRefund  Float @default(0)
+
+  supplierUserId Int
+  supplierUser   User @relation(fields: [supplierUserId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([supplierUserId, createdAt])
+}
+
+model SellerOrderLog {
+  id Int @id @default(autoincrement())
+
+  totalNewOrder       Int @default(0) // order with status UNPAID
+  totalDeliveredOrder Int @default(0) // order with status DELIVERED
+  totalRefundOrder    Int @default(0) // order with status refunded is true
+  totalPaidOrder      Int @default(0) // order with status UNFULFILLED
+  totalDisputeOrder   Int @default(0) // order has dispute status
+
+  sellerUserId Int
+  sellerUser   User @relation(fields: [sellerUserId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sellerUserId, createdAt])
+}
+
+model SupplierOrderLog {
+  id Int @id @default(autoincrement())
+
+  totalNewOrder                Int  @default(0) // order with status UNFULFILLED
+  totalDeliveredOrder          Int  @default(0) // order with status DELIVERED
+  totalRefundOrder             Int  @default(0) // order with status refunded is true
+  totalFulfilledOrder          Int  @default(0) // order with status FULFILLED
+  totalPartiallyFulfilledOrder Int  @default(0) // order with status PARTIALLY_FULFILLED
+  totalPartiallyDeliveredOrder Int  @default(0) // order with status PARTIALLY_DELIVERED
+  supplierUserId               Int
+  supplierUser                 User @relation(fields: [supplierUserId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([supplierUserId, createdAt])
+}
+
+enum SyncTo {
+  BETTAMAX
+}
+
+enum SyncStatus {
+  WAITING
+  DONE
+  FAILED
+}
+
+model UnsyncOrderTracking {
+  id Int @id @default(autoincrement())
+
+  syncTo     SyncTo     @default(BETTAMAX)
+  syncStatus SyncStatus @default(WAITING)
+
+  orderId Int
+  order   SupplierOrder @relation(fields: [orderId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+}
+
+model StoreStatusSyncFailure {
+  id Int @id @default(autoincrement())
+
+  oldStatus StoreStatus
+  newStatus StoreStatus
+
+  createdAt DateTime @default(now())
+
+  storeId Int
+  store   Store @relation(fields: [storeId], references: [id])
+
+  @@index([storeId])
+}
+
+model KafkaFailUploadTrackingLog {
+  id        Int             @id @default(autoincrement())
+  orderId   Int
+  data      Json
+  status    FailedLogStatus @default(WAITING)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+enum FailedLogStatus {
+  WAITING
+  DONE
+  FAILED
+}
+
+model AutoFulfillSetting {
+  id Int @id @default(autoincrement())
+
+  isEnabled    Boolean @default(false)
+  timeZone     String  @default("America/Los_Angeles")
+  /// [TimeSchedule]
+  timeSchedule Json
+
+  sellerUserId Int
+  sellerUser   User @relation(fields: [sellerUserId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sellerUserId])
+  @@index([isEnabled])
+}
+
+model KafkaFailAutoFulfillLog {
+  id Int @id @default(autoincrement())
+
+  status FailedLogStatus @default(WAITING)
+
+  sellerUserId Int
+  sellerUser   User @relation(fields: [sellerUserId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([sellerUserId])
+}
+
+model Shipment {
+  id Int @id @default(autoincrement())
+
+  trackingNumber        String
+  courierCode           String
+  trackingUpdatedTime   DateTime?
+  estimatedDeliveryDate DateTime?
+  deliveredDate         DateTime?
+  originCountry         String?
+  deliveryStatus        DeliveryStatus @default(PENDING)
+  refId                 String? // id from tracking more
+
+  orderItems OrderItem[]
+
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  orderTrackings OrderTracking[]
+
+  @@unique([trackingNumber, courierCode])
+}

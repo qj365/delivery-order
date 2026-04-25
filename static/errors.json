@@ -1,0 +1,62 @@
+{
+  "BadRequest": {
+    "code": 400,
+    "statusCode": 400,
+    "message": "Bad request"
+  },
+  "Unauthorized": {
+    "code": 401,
+    "statusCode": 401,
+    "message": "Unauthorized"
+  },
+  "Forbidden": {
+    "code": 403,
+    "statusCode": 403,
+    "message": "Forbidden"
+  },
+  "NotFound": {
+    "code": 404,
+    "statusCode": 404,
+    "message": "Resource not found"
+  },
+  "MethodNotAllowed": {
+    "code": 405,
+    "statusCode": 405,
+    "message": "Method not allowed"
+  },
+  "Conflict": {
+    "code": 409,
+    "statusCode": 409,
+    "message": "Conflict"
+  },
+  "UnprocessableEntity": {
+    "code": 422,
+    "statusCode": 422,
+    "message": "Unprocessable entity"
+  },
+  "TooManyRequests": {
+    "code": 429,
+    "statusCode": 429,
+    "message": "Too many requests"
+  },
+  "InternalServerError": {
+    "code": 500,
+    "statusCode": 500,
+    "message": "Internal server error"
+  },
+  "ServiceUnavailable": {
+    "code": 503,
+    "statusCode": 503,
+    "message": "Service unavailable"
+  },
+  "NotFoundEndpoint": {
+    "code": 1000,
+    "statusCode": 404,
+    "message": "Endpoint not found"
+  },
+  "ValidationError": {
+    "code": 1001,
+    "statusCode": 400,
+    "message": "Validation error"
+  }
+}
